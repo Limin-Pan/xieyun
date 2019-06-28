@@ -1,0 +1,123 @@
+1.数据库部署
+      1.1 使用虚拟机已有的数据库
+                  创建数据库：
+
+创建用户
+
+CREATE USER 'username'@'host' IDENTIFIED BY 'password';
+
+创建数据库sql
+CREATE DATABASE jiradb CHARACTER SET utf8 COLLATE utf8_bin;
+
+授权用户
+GRANT SELECT,INSERT,UPDATE,DELETE,REFERENCES,CREATE,DROP,ALTER,INDEX on jiradb.* TO 'jirauser'@'localhost' IDENTIFIED BY '123456';
+
+flush privileges;
+
+       1.2使用容器的mysql5.6
+1.2.1  下载镜像  docker pull mysql:5.6
+
+1.2.2  数据库的相关配置与数据放置在容器外，在虚拟机上创建文件夹 
+
+         （演示用，实际创建的名称什么依自己来定）
+
+          mkdir mysql-docker 
+
+         cd mysql-docker 
+
+        touch config  data
+
+       cd config   touch my.cnf
+
+在my.cnf里面保存数据库的设置
+
+[client]
+default-character-set = utf8
+
+[mysql]
+default-character-set = utf8
+
+[mysqld]
+character_set_server = utf8
+innodb_large_prefix=ON
+innodb_file_format=Barracuda
+innodb_log_file_size=2G
+sql_mode = NO_AUTO_VALUE_ON_ZERO
+collation-server = utf8_bin
+transaction_isolation = READ-COMMITTED
+default-storage-engine=INNODB
+transaction_isolation = READ-COMMITTED
+binlog_format=row
+
+
+
+启动mysql的容器，
+
+docker run -d -p 4406:3306 \                   //自己定义数据库的端口
+> --name miao \                                            //自己定义数据库容器的名称
+> --privileged=true
+> -e MYSQL_ROOT_PASSWORD \
+> -v=/home/brad/Desktop/mysql-docker/config/my.cnf:/etc/mysql/my.cnf \                    //数据库的配置信息
+
+> -v=/home/brad/Desktop/mysql-docker/data:/usr/data \                                                           //数据库的数据保存地方
+> -d mysql:5.6                                              //启动的容器
+
+
+
+查看是否启动成功  docker ps 看有无mysql这个容器
+
+进入mysql     ： docker exec -it miao bash
+
+进入后建用户与数据库这些，参考1.1
+
+
+
+2.jira部署
+采用容器的方案达到一键部署的结果，这些是展示过程，之后会制作成一个脚本
+
+下载jira镜像   docker pull cptactionhank/atlassian-jira-software
+
+修改镜像文件，制作Dockerfile
+
+FROM cptactionhank/atlassian-jira-software:latest
+
+USER root
+
+# 将代理破解包加入容器
+COPY "atlassian-agent.jar" /opt/atlassian/jira/                                  
+
+# 设置启动加载代理包
+RUN echo 'export JAVA_OPTS="-javaagent:/opt/atlassian/jira/atlassian-agent.jar ${JAVA_OPTS}"' >> /opt/atlassian/jira/bin/setenv.sh
+
+
+
+制作好镜像
+
+启动镜像：docker run -d \
+
+--name Jira \
+
+-p 9999:8080 \                  //自己选择一个端口号
+
+-d  plm/jira:v1.1             //镜像名称
+
+
+
+启动成功后打开http://{你的ip}:9999进入Jira
+
+链接数据库的时候选择1设置的数据库
+
+进入输入许可证的界面
+
+输入docker  exec -it {jira容器的id或者名字} bash
+
+cd  /opt/atlassian/jira/
+
+破解： java -jar atlassian-agent.jar -p jira -m aaa@bbb.com -n pp -o google -s  {jira服务器的ID}
+
+
+
+到此，jira部署完成
+
+
+
